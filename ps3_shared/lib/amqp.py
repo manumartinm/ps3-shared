@@ -5,12 +5,13 @@ from typing import Callable, Optional
 class AMQPManager:
     def __init__(
         self,
-        host: str,
-        port: int = 5672,
-        username: str = "guest",
-        password: str = "guest",
-        virtual_host: str = "/",
+        AMQP_URL: str,
     ) -> None:
+        match = re.match(r"amqp://(.*?):(.*?)@(.*?):(\d+)(/.*)?", AMQP_URL)
+        if not match:
+            raise ValueError("AMQP_URL mal formado")
+        username, password, host, port, _ = match.groups()
+        port = int(port)
         credentials = pika.PlainCredentials(username, password)
         self.connection_params: pika.ConnectionParameters = pika.ConnectionParameters(
             host=host, port=port, virtual_host=virtual_host, credentials=credentials
