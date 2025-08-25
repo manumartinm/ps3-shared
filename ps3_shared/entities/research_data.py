@@ -1,8 +1,5 @@
 from typing import List, Optional, TypeVar, Generic
 from pydantic import BaseModel, Field, field_validator, model_validator
-
-# pyrefly: ignore  # missing-module-attribute
-from pydantic.generics import GenericModel
 import re
 
 T = TypeVar("T")
@@ -19,7 +16,7 @@ class FieldExplanation(BaseModel):
     )
 
 
-class FieldWithExplanation(GenericModel, Generic[T]):
+class FieldWithExplanation(BaseModel, Generic[T]):
     value: Optional[T]
     explanation: Optional[str] = Field(
         description="A detailed explanation for the 'value' of this field, "
@@ -75,15 +72,27 @@ class ResearchArticle(BaseModel):
     # pyrefly: ignore  # bad-argument-type
     @field_validator("type", mode="after")
     @classmethod
-    def contains_experiment_id(
-        cls, v: FieldWithExplanation[str], info
+    def normalize_experiment_id(
+        cls, v: FieldWithExplanation[str], _info
     ) -> FieldWithExplanation[str]:
-        if v.value is not None:
-            if not re.search(r"\b[A-Z]{2,10}:\d{7}\b", str(v.value)):
-                raise ValueError(
-                    f"{info.field_name}.value must include a valid ontology identifier like 'OBI:0000854' or 'ECO:0001091'"
-                )
+        """Extrae y normaliza un ID ontológico al formato PREFIX:NNNNNNN.
 
+        Soporta variantes como:
+        - OBI:0000854
+        - OBI_0000854
+        - obi0000854
+        - ECO-0001091
+        - Texto libre que contenga alguno de los patrones anteriores
+        """
+        if v.value is not None:
+            text = str(v.value)
+            # Prefijo (2-10 letras) + separador opcional + al menos 7 caracteres numéricos o '_'
+            # Se permite '_' intercalado entre los dígitos, p.ej. OBI:000_0854 o ECO_0001091_2
+            m = re.search(r"(?i)\b([a-z]{2,10})[ _:-]?([0-9_]{7,})\b", text)
+            if m:
+                prefix = m.group(1).upper()
+                digits = m.group(2).replace("_", "")  # normalizar quitando '_'
+                v.value = f"{prefix}:{digits}"
         return v
 
     # pyrefly: ignore  # bad-argument-type
